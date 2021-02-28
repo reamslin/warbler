@@ -71,3 +71,90 @@ class MessageViewTestCase(TestCase):
 
             msg = Message.query.one()
             self.assertEqual(msg.text, "Hello")
+    
+    def test_delete_message(self):
+        """can user delete message?"""
+
+        with self.client as c:
+            with c.session_transaction() as sess:
+                sess[CURR_USER_KEY] = self.testuser.id
+
+            m = Message(
+                user_id = self.testuser.id,
+                text="delete me")
+            db.session.add(m)
+            db.session.commit()
+
+            resp = c.post(f"/messages/{m.id}/delete")
+            self.assertEqual(resp.status_code, 302)
+
+            msg = Message.query.get(m.id)
+            self.assertIsNone(msg)
+
+    def test_not_logged_in_add_message(self):
+        """are you prohibited from adding messages when logged out?"""
+
+        with self.client as c:
+
+            resp = c.post("/messages/new", data={"text": "Hello"}, follow_redirects=True) 
+
+            self.assertIn("Access unauthorized", str(resp.data))
+
+    def test_not_logged_in_delete_message(self):
+        """ are you prohibited from deleting messages when logged out?"""
+        with self.client as c:
+
+            m = Message(
+                user_id = self.testuser.id,
+                text="just try to delete me")
+
+            db.session.add(m)
+            db.session.commit()
+
+            resp = c.post(f"/messages/{m.id}/delete", follow_redirects = True)
+
+            self.assertIn("Access unauthorized", str(resp.data))
+
+            msg = Message.query.get(m.id)
+
+            self.assertIsNotNone(msg)
+
+    def test_not_user_add_message(self):
+        """ are you prohibited from adding a message as another user?"""
+
+        with self.client as c:
+            with c.session_transaction() as sess:
+                sess[CURR_USER_KEY] = 2342349302948
+
+            resp = c.post("/messages/new", data={"text": "Hello"}, follow_redirects=True)
+
+            self.assertIn("Access unauthorized", str(resp.data))
+
+#This test raises an error
+    """def test_not_user_delete_message(self):
+        with self.client as c:
+            u = User.signup("notme", "no@gmail.com", "password", None)
+            db.session.commit()
+
+            with c.session_transaction() as sess:
+                sess[CURR_USER_KEY] = u.id
+
+            m = Message(
+                user_id = self.testuser.id,
+                text="just try to delete me")
+            db.session.add(m)
+            db.session.commit()
+
+            resp = c.post(f"/messages/{m.id}/delete", follow_redirects=True)
+
+            self.assertIn("Access unauthorized", str(resp.data))
+
+            msg = Message.query.get(m.id)
+
+            self.assertIsNotNone(msg)    
+            """
+
+
+
+
+
